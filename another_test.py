@@ -43,7 +43,7 @@ def send_request_to_gemini(query):
         # logger.debug(f"Raw response from litellm: {json.dumps(response, indent=2)}")
         
         # Extract the content from the response
-        response_content = response['choices'][0]['message']['content']
+        response_content = response.choices[0]["message"]["content"]
         logger.debug(f"Extracted response content: {response_content}")
         
         return response_content

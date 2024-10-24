@@ -2,17 +2,6 @@ import os
 import pathway as pw
 from pathway.xpacks.llm.llms import LiteLLMChat, prompt_chat_single_qa
 
-def my_prompt_chat_single_qa(query):
-    return {
-        "contents": [
-            {
-                "parts": [
-                    {"text": query}
-                ]
-            }
-        ]
-    }
-
 HTTP_HOST = os.environ.get("PATHWAY_REST_CONNECTOR_HOST", "127.0.0.1")
 HTTP_PORT = os.environ.get("PATHWAY_REST_CONNECTOR_PORT", "8080")
 
@@ -43,7 +32,7 @@ data_sources.append(
     pw.io.fs.read(
         "./sample_documents",
         format="binary",
-        mode="static",
+        mode="streaming",
         with_metadata=True,
     )
 )
@@ -57,5 +46,5 @@ response = query.select(
     query_id=pw.this.id, result=model(prompt_chat_single_qa(pw.this.query))
 )
 
-# response_writer(response)
+response_writer(response)
 pw.run()

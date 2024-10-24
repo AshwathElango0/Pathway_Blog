@@ -1,13 +1,19 @@
 import asyncio
 import pathway as pw
 
-from langchain.embeddings.huggingface import HuggingFaceEmbeddings
-from llama_index.embeddings.langchain import LangchainEmbedding
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from llama_index.embeddings.openai import OpenAIEmbedding
 
 from pathway.xpacks.llm.vector_store import VectorStoreServer
 from langchain.embeddings.huggingface import HuggingFaceEmbeddings
 from llama_index.core.node_parser import TokenTextSplitter
 
+from llama_index.embeddings.gemini import GeminiEmbedding
+from llama_index.embeddings.openai import OpenAIEmbedding
+from llama_index.core import VectorStoreIndex
+from llama_index.core import Settings
+from llama_index.embeddings.langchain import LangchainEmbedding
+import regex 
 # Use a general HuggingFace embedding model without API keys
 embed_model = LangchainEmbedding(HuggingFaceEmbeddings(model_name='sentence-transformers/all-MiniLM-L6-v2'))
 

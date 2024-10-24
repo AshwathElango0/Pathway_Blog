@@ -41,7 +41,7 @@ tools = [
         },
     }
 ]
-messages = [{"role": "user", "content": "What is the weather in Jaipur today?"}]
+messages = [{"role": "user", "content": "What happened in J and K today ?"}]
 
 response = completion(
     model="gemini/gemini-1.5-flash",

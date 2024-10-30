@@ -56,3 +56,8 @@ pw.run()
 # Debugging: Print out the results from Pathway
 print("Debugging result from Pathway:")
 result_table.debug(name="Result Table")
+
+
+google-generativeai
+llama-index-embeddings-gemini
+llama-index-embeddings

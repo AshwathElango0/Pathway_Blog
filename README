@@ -1,0 +1,14 @@
+The repo consists of various hits and trials to use pathway and create a basic RAG infrastructure
+
+
+Current Success:
+Directory ```current_work``` has 3 files
+1) anothet_llama.py : server having VectorStoreServer listens at a local host and port
+2) custom_llm_chat.py: custom llm chat which basically mimics LiteLLM 
+3) new_retriver.py: VectorStoreClient , which gets the context and then uses customLLMchat to get the final value.
+
+
+```data``` contains the data , feel free to add files of various formats and test it.
+
+
+Please install libmagic in your system for ParseUnstructured.

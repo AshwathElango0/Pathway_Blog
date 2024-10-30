@@ -5,7 +5,7 @@ from custom_llm_chat import CustomLiteLLMChat
 import os
 import pathway as pw
 # set env
-os.environ["GEMINI_API_KEY"] = "AIzaSyB_ic4AmBCWeFGnhV4WcVyU9GKPRRVQTyc"
+os.environ["GEMINI_API_KEY"] = "AIzaSyB_ic4AmBCWeFGnhV4WcVyU9GKPRRVQTyc" # use your api key here
 
 VECTOR_STORE_HOST = "127.0.0.1"
 VECTOR_STORE_PORT = 8755
@@ -54,7 +54,7 @@ print("\n--- LLM Response ---")
 # print(response)
 # pw.run()
 response = model.get_response(messages)
-# print(f'\n\nResponse: {response}')
+print(f'\n\nResponse: {response}')
 # messages = [{"role": "user", "content": prompt}]
 
 # response = completion(

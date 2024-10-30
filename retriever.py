@@ -21,5 +21,5 @@ query_engine = RetrieverQueryEngine.from_args(
     retriever,
 )
 
-response = query_engine.query("What happened in J and K today tell me in detail ? ")
+response = query_engine.query("how are you ?")
 print(str(response))

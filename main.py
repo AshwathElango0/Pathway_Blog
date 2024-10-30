@@ -17,7 +17,6 @@ class QueryInputSchema(pw.Schema):
     user: str
     query: str
 
-
 query, response_writer = pw.io.http.rest_connector(
     host=HTTP_HOST,
     port=int(HTTP_PORT),

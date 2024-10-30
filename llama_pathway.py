@@ -1,13 +1,10 @@
 import asyncio
 import pathway as pw
-
-from langchain_community.embeddings import HuggingFaceEmbeddings
-from llama_index.embeddings.openai import OpenAIEmbedding
-
+import numpy as np
 from pathway.xpacks.llm.vector_store import VectorStoreServer
 from langchain.embeddings.huggingface import HuggingFaceEmbeddings
 from llama_index.core.node_parser import TokenTextSplitter
-
+from pathway.xpacks.llm.splitters import TokenCountSplitter
 from llama_index.embeddings.gemini import GeminiEmbedding
 from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.core import VectorStoreIndex
@@ -34,8 +31,7 @@ data_sources.append(
         format="binary",
         mode="streaming",
         with_metadata=True,
-    )  # This creates a `pathway` connector that tracks
-    # all the files in the ./data directory
+    )
 )
 
 processing_pipeline = VectorStoreServer.from_llamaindex_components(

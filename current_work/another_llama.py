@@ -36,6 +36,7 @@ data_sources = pw.io.fs.read(
     with_metadata=True,
 )
 
+
 splitter = TokenCountSplitter(min_tokens=1, max_tokens=100)
 embedder = SentenceTransformerEmbedder(model ='all-MiniLM-L6-v2')
 parser = ParseUnstructured() # must have libmagic in system to use this

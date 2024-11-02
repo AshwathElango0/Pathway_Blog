@@ -1,8 +1,13 @@
 from litellm import completion
 import os
+import google.generativeai as genai
+
+
 # set env
 os.environ["GEMINI_API_KEY"] = "AIzaSyB_ic4AmBCWeFGnhV4WcVyU9GKPRRVQTyc"
 
+# Configure the API key
+genai.configure(api_key="AIzaSyB_ic4AmBCWeFGnhV4WcVyU9GKPRRVQTyc")
 tools = [
     {
         "type": "function",
@@ -45,6 +50,7 @@ messages = [{"role": "user", "content": "What happened in J and K today ?"}]
 
 response = completion(
     model="gemini/gemini-1.5-flash",
+    api_key="AIzaSyB_ic4AmBCWeFGnhV4WcVyU9GKPRRVQTyc",
     messages=messages,
     tools=tools,
 )

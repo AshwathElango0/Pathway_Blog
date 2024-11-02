@@ -1,53 +1,60 @@
 from agent import Agent
 from typing import List
-api_key = 'AIzaSyB_ic4AmBCWeFGnhV4WcVyU9GKPRRVQTyc'
 
+api_key = 'AIzaSyCDfqPNXPPfBsW5fgGbmiMfro5loK15wt0'
 
-instructions = """You are a helpful assistant, capable of retrieving and summarizing information by selectively using available functions, each designed to respond differently based on the nature of the user's question. Remember, you possess no independent knowledge, and any response should either come from the user’s provided information or the functions you call. Here is how to decide which function to use:
-
-    Use function1: If the user's query implies or directly states that the answer can be found solely within their uploaded documents, choose function1. This is true even if there’s only a slight indication that the user’s uploaded information may answer their question. Do not use external sources in this case.
-
-    Use function2: If the query suggests that an answer might require both the user’s documents and additional information inferred from other sources, or if it lacks sufficient detail to answer entirely on its own, choose function2. This function combines insights from the provided documents and external data that you can infer or deduce.
-
-    Use function3: Use it for questions whose answer lie explicitly in the query itself. So, factual questions, definitions will never use function3.
-
-Always select the function that fits best according to these guidelines, and rely on your own response only if calling function3.
+instructions = """You are a helpful assistant. Return 1, 2, or 3 based on the following:
+1 - Use it when answer can be provided solely based on uploaded documents. It must be implied that query requires answer from uploaded documents.
+2 - Use it when question is too generic, and you need to use external sources
+3 - Answer can be provided directly
 """
 
 
-agent = Agent.from_model("gemini/gemini-1.5-flash", instructions=instructions, api_key=api_key, temperature=0.0, max_tokens=50)
+agent = Agent.from_model("gemini/gemini-1.5-flash", instructions=instructions, api_key=api_key, temperature=0.0, max_tokens=10000)
 
-def function1(uploaded_doc_names: List[str]):
-    """Function to perform if the given user query can be answered only by the documents uploaded by him"""
-    return "This is the response from function1"
 
-def function2(uploaded_doc_names: List[str]):
-    """Function to perform if the given user query can be answered by using user uploaded documents and external sources, external sources might not be mentioned but must be inferred."""
-    return "This is the response from function2"
+from typing import Literal
+def choose_path(path: Literal[1,2, 3]) -> str:
+    """Called based on what path is decided.
+        1 - Use it when answer can be provided solely based on uploaded documents. It must be implied that query requires answer from uploaded documents.
+        2 - Use it when question is too generic, and you need to use external sources
+        3 - Answer can be provided directly
+    """
+    if path == 1:
+        # Only use uploaded documents
+        return "This is the response based solely on uploaded documents."
+    elif path == 2:
+        # Use both uploaded documents and external sources
+        return "This is the response based on uploaded documents and inferred external sources."
+    elif path == 3:
+        # Answer can be provided directly
+        return "This is the response that can be answered directly without retrieval."
 
-def function3(string: str):
-    """Function to perform if the given user query doesn't need any sources, and can be answered by the agent itself"""
-    return "This is the response from function3"
-
-agent.add_tools([function1, function2, function3])
-# set env
-
-LLM_API_KEY = "AIzaSyB_ic4AmBCWeFGnhV4WcVyU9GKPRRVQTyc"
+LLM_API_KEY = 'AIzaSyCDfqPNXPPfBsW5fgGbmiMfro5loK15wt0'
 from custom_llm_chat import CustomLiteLLMChat
 
 model = CustomLiteLLMChat(
     model="gemini/gemini-1.5-flash",
     api_key=LLM_API_KEY,
     temperature=0.0,
-    max_tokens=100,
+    max_tokens=1000,
 )
 
+agent.add_tools([choose_path])
+import json
 while True:
     user_query = input("Enter your query: ")
-    response = agent.send_request(user_query)
+    choices = agent.send_request(user_query)
+    # print(choices[0].function.arguments)
+    if len(choices) ==0:
+        path = 2
+    else:
+        args = choices[0].function.arguments
+        args = json.loads(args)
+        path = int(args["path"])
+    response = choose_path(path)
     print(response)
-    if response.function.name == 'function3':
+    
+    if path == 3:
         res = model.get_response([{"role": "user", "content": user_query}])
         print(f'\n\nResponse: {res}')
-
-    

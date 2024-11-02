@@ -18,7 +18,7 @@ from pathway.xpacks.llm._utils import _check_model_accepts_arg  # Ensure this ut
 from litellm.utils import function_to_dict
 # Configure logging
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# logger = logging.getLogger(__name__)
 
 class LLMAgent(BaseChat):
     """
@@ -73,11 +73,11 @@ class LLMAgent(BaseChat):
         Returns:
             Optional[str]: LLM response or None.
         """
-        logger.info("Entering __wrapped__ method.")
+        # logger.info("Entering __wrapped__ method.")
 
         # Merge default and overridden kwargs
         request_kwargs = {**self.litellm_kwargs, **kwargs}
-        logger.debug(f"Request kwargs: {request_kwargs}")
+        # logger.debug(f"Request kwargs: {request_kwargs}")
 
         # Log the request event
         event = {
@@ -90,17 +90,17 @@ class LLMAgent(BaseChat):
         try:
             # Call litellm completion synchronously
             response = litellm.completion(messages=messages, **request_kwargs)
-            logger.info("Received response from litellm.completion.")
+            # logger.info("Received response from litellm.completion.")
 
             # Log the response event
             event = {
                 "_type": "lite_llm_chat_response",
                 "response": "hello",
             }
-            logger.info(json.dumps(event))
+            # logger.info(json.dumps(event))
             return response
         except Exception as e:
-            logger.error(f"Error generating response from LiteLLM: {e}")
+            # logger.error(f"Error generating response from LiteLLM: {e}")
             return None
 
     def __call__(self, messages: pw.ColumnExpression, **kwargs) -> pw.ColumnExpression:
@@ -155,7 +155,8 @@ class Agent:
             ]
 
             response = self.llm.get_response(messages, tools=self.tools)
-            res = response.choices[0]["message"]["tool_calls"][0]
+            # print(response)
+            res = response.choices[0]["message"]["tool_calls"]
             return res
             
         except Exception as e:
@@ -164,7 +165,7 @@ class Agent:
                 "error": str(e)
             }
             
-            logger.error(json.dumps(event))
+            # logger.error(json.dumps(event))
             raise e
         
         

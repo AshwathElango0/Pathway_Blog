@@ -9,17 +9,17 @@ os.environ["GEMINI_API_KEY"] = "AIzaSyB_ic4AmBCWeFGnhV4WcVyU9GKPRRVQTyc" # use y
 
 VECTOR_STORE_HOST = "127.0.0.1"
 VECTOR_STORE_PORT = 8755
-FIXED_QUERY = "what is numpy ?  "
+FIXED_QUERY = input("Enter your query: ")
 LLM_API_KEY = "AIzaSyB_ic4AmBCWeFGnhV4WcVyU9GKPRRVQTyc"
 
 import logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-client = VectorStoreClient(host=VECTOR_STORE_HOST, port=VECTOR_STORE_PORT)
+client = VectorStoreClient(host=VECTOR_STORE_HOST, port=VECTOR_STORE_PORT, timeout=1000)
 
 
-model = CustomLiteLLMChat(
+model = LiteLLMChat(
     model="gemini/gemini-1.5-flash",
     api_key=LLM_API_KEY,
     temperature=0.0,
@@ -27,7 +27,7 @@ model = CustomLiteLLMChat(
 )
 
 
-documents = client(FIXED_QUERY, k=1)
+documents = client(FIXED_QUERY, k= 10)
 print(f"Retrieved {len(documents)} documents.")
 # print(documents)
 
@@ -48,12 +48,12 @@ messages = [
 
 print(context)
 # Call the UDF correctly
-# response =  model(prompt)  # Using a helper method for direct invocation
+response =  model(prompt)  # Using a helper method for direct invocation
 
 print("\n--- LLM Response ---")
 # print(response)
 # pw.run()
-response = model.get_response(messages)
+# response = model.get_response(messages)
 print(f'\n\nResponse: {response}')
 # messages = [{"role": "user", "content": prompt}]
 

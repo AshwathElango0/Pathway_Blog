@@ -5,10 +5,13 @@ import asyncio
 import threading
 from pathway.xpacks.llm.splitters import TokenCountSplitter
 from pathway.xpacks.llm.embedders import BaseEmbedder , SentenceTransformerEmbedder
-from pathway.xpacks.llm.parsers import ParseUtf8, ParseUnstructured
-
+from pathway.xpacks.llm.parsers import ParseUtf8, ParseUnstructured, OpenParse
+import os
 model = SentenceTransformer('all-MiniLM-L6-v2')
 
+
+if 'TESSDATA_PREFIX' not in os.environ:
+    os.environ['TESSDATA_PREFIX'] = '/usr/local/share/tessdata'
 # def embedder(text: str) -> list[float]:
 #     return model.encode(text).tolist()
 
@@ -30,7 +33,7 @@ model = SentenceTransformer('all-MiniLM-L6-v2')
 
 
 data_sources = pw.io.fs.read(
-    "./data",
+    "/Users/arushigarg/Desktop/sem_5/Pathway/data/parallel_algo.pdf",
     format="binary",
     mode="streaming",
     with_metadata=True,
@@ -41,10 +44,16 @@ splitter = TokenCountSplitter(min_tokens=1, max_tokens=100)
 embedder = SentenceTransformerEmbedder(model ='all-MiniLM-L6-v2')
 parser = ParseUnstructured() # must have libmagic in system to use this
 
+another_parser = OpenParse(
+    table_args={
+        "parsing_algorithm": "pymupdf",
+
+    }
+)
 vector_store_server = VectorStoreServer(
     data_sources,
     embedder=embedder,
-    parser=parser,
+    parser=another_parser,
     splitter=splitter,
     # doc_post_processors=[remove_extra_whitespace],  # Optional
 )

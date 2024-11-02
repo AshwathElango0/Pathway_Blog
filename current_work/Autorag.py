@@ -111,10 +111,11 @@ def main():
     # Since Autogen expects interactions between two agents, we use a minimal User Agent.
     
     # Initiate the chat with a user query
-    user_query = "What is the definition of a black hole as per this reasearch paper?"
+    user_query = "How to solve World Hunger?"
     chat_result = user_proxy.initiate_chat(
         recipient=assistant,   # Specify the Assistant Agent as the recipient
         message=user_query,
+        max_turns= 1
     )
     
     # Print the result

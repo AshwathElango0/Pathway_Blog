@@ -1,69 +1,124 @@
-from autogen import Agent
-from autogen import Tool
 from typing import List
-from custom_llm_chat import CustomLiteLLMChat
+import os
+import autogen
+from autogen import ConversableAgent, register_function
 
-# API key for the LLM model
-api_key = 'AIzaSyB_ic4AmBCWeFGnhV4WcVyU9GKPRRVQTyc'
+# Define the functions that handle different types of queries
 
-# Instructions to guide the agent's function selection behavior
-instructions = """
-You are a helpful assistant who retrieves and summarizes information by selectively using available functions, each responding differently based on the user's question. You have no independent knowledge, and any response should come either from the user’s provided information or the functions you call.
+def function1(uploaded_doc_names: List[str]) -> str:
+    """
+    Function to perform if the given user query can be answered only by the documents uploaded by the user.
+    """
+    # Implement your logic here
+    return f"Function1 executed with documents: {', '.join(uploaded_doc_names)}"
 
-- Use `function1` for questions implying that the answer is found solely within uploaded documents.
-- Use `function2` when questions require a combination of user documents and inferred external information.
-- Use `function3` only if the question itself contains the explicit answer.
-"""
+def function2(uploaded_doc_names: List[str]) -> str:
+    """
+    Function to perform if the given user query can be answered by using user-uploaded documents and external sources.
+    External sources might not be mentioned but must be inferred.
+    """
+    # Implement your logic here
+    return f"Function2 executed with documents: {', '.join(uploaded_doc_names)} and external sources."
 
-# Define each function with a description and selection criteria
-def function1(uploaded_doc_names: List[str]):
-    """This function responds if the query can be answered only by the user's uploaded documents."""
-    return "This is the response from function1"
+def function3(query: str) -> str:
+    """
+    Function to perform if the given user query doesn't need any sources and can be answered by the agent itself.
+    """
+    # Implement your logic here
+    return f"Function3 executed. Answering directly: {query}"
 
-def function2(uploaded_doc_names: List[str]):
-    """This function responds if the query requires both user-uploaded documents and inferred external information."""
-    return "This is the response from function2"
-
-def function3(string: str):
-    """This function responds if the query contains all necessary information for the answer."""
-    return "This is the response from function3"
-
-# Wrap functions as AutoGen tools with clear descriptions
-tools = [
-    Tool(name="function1", function=function1, description="Only use this function if the answer is found solely in uploaded documents."),
-    Tool(name="function2", function=function2, description="Use this function when an answer requires user documents plus inferred external information."),
-    Tool(name="function3", function=function3, description="Use this only when the answer is explicit within the query."),
-]
-
-# Initialize the agent with the model, API key, and instructions
-agent = Agent(
-    model="gemini/gemini-1.5-flash",
-    api_key=api_key,
-    instructions=instructions,
-    tools=tools,
-    temperature=0.0,
-    max_tokens=50,
-)
-
-# Set up a loop for processing user queries
-while True:
-    user_query = input("Enter your query: ")
+def main():
+    # Load Gemini-specific configurations
+    config_list_gemini = autogen.config_list_from_json(
+        "config.json",
+        filter_dict={
+            "model": ["gemini-1.5-flash"],  # Corrected model name format
+        },
+    )
     
-    # Process the query through the agent
-    response = agent.send_request(user_query)
-    print(f"\nResponse: {response['content']}")
+    print("Loaded Gemini Configurations:", config_list_gemini)
+    
+    # Define the Assistant Agent that suggests tool calls.
+    assistant = ConversableAgent(
+        name="Assistant",
+        system_message=(
+            "You are a helpful AI assistant capable of determining the appropriate method to answer user queries. "
+            "Use 'Function1' if the answer relies solely on user-uploaded documents, "
+            "'Function2' if it requires both user-uploaded documents and external sources, "
+            "or 'Function3' if no external sources are needed. "
+            "Return 'TERMINATE' when the task is done."
+        ),
+        llm_config={"config_list": config_list_gemini},
+    )
+    
+    # Define the User Proxy Agent that executes tool calls.
+    user_proxy = ConversableAgent(
+        name="UserProxy",
+        llm_config={"config_list": config_list_gemini},
+        is_termination_msg=lambda msg: msg.get("content") is not None and "TERMINATE" in msg["content"],
+        human_input_mode="NEVER",
+    )
+    
+    # # Register the tool signatures with the Assistant Agent.
+    # assistant.register_for_llm(
+    #     name="Function1",
+    #     description="Use this function when the answer relies solely on user-uploaded documents."
+    # )(function1)
+    
+    # assistant.register_for_llm(
+    #     name="Function2",
+    #     description="Use this function when the answer requires both user-uploaded documents and external sources."
+    # )(function2)
+    
+    # assistant.register_for_llm(
+    #     name="Function3",
+    #     description="Use this function when no external sources are needed and the answer can be provided directly by the agent."
+    # )(function3)
+    
+    # # Register the tool functions with the User Proxy Agent.
+    # user_proxy.register_for_execution(name="Function1")(function1)
+    # user_proxy.register_for_execution(name="Function2")(function2)
+    # user_proxy.register_for_execution(name="Function3")(function3)
+    
+    # Register the functions with Autogen
+    register_function(
+        function1,
+        caller=assistant,       # The Assistant can suggest calls to Function1
+        executor=user_proxy,    # The User Proxy can execute Function1
+        name="Function1",
+        description="Use this function when the answer relies solely on user-uploaded documents.",
+    )
+    
+    register_function(
+        function2,
+        caller=assistant,       # The Assistant can suggest calls to Function2
+        executor=user_proxy,    # The User Proxy can execute Function2
+        name="Function2",
+        description="Use this function when the answer requires both user-uploaded documents and external sources.",
+    )
+    
+    register_function(
+        function3,
+        caller=assistant,       # The Assistant can suggest calls to Function3
+        executor=user_proxy,    # The User Proxy can execute Function3
+        name="Function3",
+        description="Use this function when no external sources are needed and the answer can be provided directly by the agent.",
+    )
+    
 
-    # If `function3` was chosen, generate a direct answer using the LLM
-    if response['function_called'] == 'function3':
-        
-        # Create a direct response using the language model for questions containing the answer
-        model = CustomLiteLLMChat(
-            model="gemini/gemini-1.5-flash",
-            api_key=api_key,
-            temperature=0.0,
-            max_tokens=100,
-        )
-        
-        # Generate response for the query itself
-        direct_response = model.get_response([{"role": "user", "content": user_query}])
-        print(f"\nDirect Response: {direct_response}")
+    
+    # Register the User Agent to send the initial message
+    # Since Autogen expects interactions between two agents, we use a minimal User Agent.
+    
+    # Initiate the chat with a user query
+    user_query = "What is the definition of a black hole as per this reasearch paper?"
+    chat_result = user_proxy.initiate_chat(
+        recipient=assistant,   # Specify the Assistant Agent as the recipient
+        message=user_query,
+    )
+    
+    # Print the result
+    print("Chat Result:", chat_result)
+    
+if __name__ == "__main__":
+    main()

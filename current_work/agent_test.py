@@ -10,7 +10,7 @@ instructions = """You are a helpful assistant. Return 1, 2, or 3 based on the fo
 """
 
 
-agent = Agent.from_model("gemini/gemini-1.5-flash", instructions=instructions, api_key=api_key, temperature=0.0, max_tokens=10000)
+agent = Agent.from_model("gemini/gemini-1.5-flash", instructions=instructions, api_key=api_key, temperature=0.0, max_tokens=10000, name="Assistant")
 
 
 from typing import Literal
@@ -44,7 +44,8 @@ agent.add_tools([choose_path])
 import json
 while True:
     user_query = input("Enter your query: ")
-    choices = agent.send_request(user_query)
+    res = agent.send_request(user_query)
+    choices = res.choices[0]["message"]["tool_calls"]
     # print(choices[0].function.arguments)
     if len(choices) ==0:
         path = 2

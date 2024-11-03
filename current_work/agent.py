@@ -125,23 +125,28 @@ class LLMAgent(BaseChat):
     
 
 
+class ChatResult:
+    """Placeholder for ChatResult. Implement as needed."""
+    def __init__(self, history: List[Dict] = None):
+        self.history = history or []
 
 
 class Agent:
+    name: str = "assistant"
     model : str 
     instructions: str = "You are a helpful agent"
     llm: LLMAgent = pydantic.Field(default=None, exclude=True)
     tools: List[Dict] = []
     
-    def __init__(self, model, llm, instructions=None):
+    def __init__(self, model, llm, name="assistant",instructions=None):
         self.model = model
         self.llm = llm
         self.instructions = instructions
         
     @classmethod
-    def from_model(cls, model: str, instructions:str, **kwargs):
+    def from_model(cls, model: str, name: str, instructions:str, **kwargs):
         llm = LLMAgent(model=model, **kwargs)
-        return cls(model=model, llm=llm, instructions=instructions)
+        return cls(model=model, llm=llm,name = name, instructions=instructions)
     
     def add_tools(self, tools: List[Callable]):
         for tool in tools:
@@ -155,9 +160,9 @@ class Agent:
             ]
 
             response = self.llm.get_response(messages, tools=self.tools)
-            # print(response)
-            res = response.choices[0]["message"]["tool_calls"]
-            return res
+            print(response)
+            
+            return response
             
         except Exception as e:
             event = {
@@ -169,7 +174,71 @@ class Agent:
             raise e
         
         
-    
-    
+    def initiate_chat(
+        self,
+        partner_agent: "Agent",
+        user_input: str,
+        max_turns: int = 5,
+    ) -> ChatResult:
+        """
+        Initiate an interactive chat session between two agents.
+
+        Args:
+            partner_agent (Agent): The second agent to interact with.
+            max_turns (Optional[int]): Maximum number of conversation turns. Defaults to unlimited.
+            initial_message (Optional[str]): Initial message to start the chat. If None, prompts the user.
+
+        Returns:
+            ChatResult: The result of the chat session, including history.
+        """
+        print("Chat session initiated between two agents. Type 'exit' or 'quit' to end the chat.\n")
+
+        chat_history = [{self.name: user_input}]
+
+        for i in range(max_turns):
+            # Agent 1 (self) sends a message to Agent 2 (partner_agent)
+            print("---------------------------------------------------")
+            print(f"{self.name} -> {partner_agent.name}: {user_input}")
+            
+            # Send the message to the partner agent
+            response = partner_agent.send_request(user_input)
+            print(response)
+            
+            # Save the response in the chat history
+            
+            choices = response.choices[0]
+            message = choices["message"]
+            tool_calls = message["tool_calls"]
+            
+            if len(tool_calls) == 0:
+                print("No tool calls")
+            else:
+                print(tool_calls[0].function.arguments)
+                
+
+            chat_history.append({partner_agent.name: message})
+            
+            # Agent 2 (partner_agent) sends a message to Agent 1 (self)
+            print("---------------------------------------------------")
+            print(f"{partner_agent.name} -> {self.name}: {message}")
+            
+            # Send the message to the self agent
+            response = self.send_request(message)
+            print(response)
+            
+            # Save the response in the chat history
+            choices = response.choices[0]
+            message = choices["message"]
+            
+            chat_history.append({self.name: message})
+            
+            # Check for exit command
+            if user_input.lower() in ["exit", "quit"]:
+                break
+                
+            
+            
+            
+            
     
 

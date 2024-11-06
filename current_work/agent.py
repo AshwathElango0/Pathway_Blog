@@ -16,10 +16,13 @@ from pathway.udfs import AsyncRetryStrategy, CacheStrategy
 from pathway.xpacks.llm.llms import BaseChat
 from pathway.xpacks.llm._utils import _check_model_accepts_arg  # Ensure this utility is correctly imported
 from litellm.utils import function_to_dict
+import os
+
+os.environ['LITELLM_LOG'] = 'DEBUG'
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 # logger = logging.getLogger(__name__)
-
+os.environ['LITELLM_LOG'] = 'DEBUG'
 class LLMAgent(BaseChat):
     """
     Custom Pathway wrapper for LiteLLM Chat services using litellm.
@@ -88,6 +91,7 @@ class LLMAgent(BaseChat):
         # logger.info(json.dumps(event))
 
         try:
+            
             # Call litellm completion synchronously
             response = litellm.completion(messages=messages, **request_kwargs)
             # logger.info("Received response from litellm.completion.")
@@ -129,6 +133,23 @@ class ChatResult:
     """Placeholder for ChatResult. Implement as needed."""
     def __init__(self, history: List[Dict] = None):
         self.history = history or []
+    
+    def generate_context(self):
+        context = ""
+        for message in self.history:
+            for agent, content in message.items():
+                context += f"{agent}: {content}\n"
+        
+        return context
+    
+    def add_message(self, agent: str, message: str):
+        self.history.append({agent: message})
+        
+    def __str__(self):
+        return self.generate_context()
+    
+    def __repr__(self):
+        return self.generate_context()
 
 
 class Agent:
@@ -137,21 +158,26 @@ class Agent:
     instructions: str = "You are a helpful agent"
     llm: LLMAgent = pydantic.Field(default=None, exclude=True)
     tools: List[Dict] = []
+    functions: Dict[str, Callable] = {}
     
     def __init__(self, model, llm, name="assistant",instructions=None):
         self.model = model
         self.llm = llm
         self.instructions = instructions
+        self.name  = name
+
         
     @classmethod
-    def from_model(cls, model: str, name: str, instructions:str, **kwargs):
+    def from_model(cls, model: str, name: str, instructions:str = "", **kwargs):
         llm = LLMAgent(model=model, **kwargs)
         return cls(model=model, llm=llm,name = name, instructions=instructions)
     
     def add_tools(self, tools: List[Callable]):
         for tool in tools:
             self.tools.append(function_to_dict(tool))
-            
+    def register_tool_for_execution(self, tool: Callable):
+        self.functions[tool.__name__] = tool
+        
     def send_request(self, query):
         try:
             messages = [
@@ -160,7 +186,6 @@ class Agent:
             ]
 
             response = self.llm.get_response(messages, tools=self.tools)
-            print(response)
             
             return response
             
@@ -174,71 +199,310 @@ class Agent:
             raise e
         
         
+    import json
+    from typing import Optional, Tuple
+
+# Assuming ChatResult and Agent classes are defined elsewhere
+# from your_module import ChatResult, Agent
+
     def initiate_chat(
-        self,
-        partner_agent: "Agent",
-        user_input: str,
-        max_turns: int = 5,
-    ) -> ChatResult:
+            self,
+            partner_agent: "Agent",
+            user_input: str,
+            max_turns: Optional[int] = None,
+            termination_cond: Optional[Callable[[str], bool]] = None,
+            silent: bool = False
+        ) -> "ChatResult":
         """
         Initiate an interactive chat session between two agents.
 
         Args:
             partner_agent (Agent): The second agent to interact with.
+            user_input (str): Initial message to start the chat.
             max_turns (Optional[int]): Maximum number of conversation turns. Defaults to unlimited.
-            initial_message (Optional[str]): Initial message to start the chat. If None, prompts the user.
+            termination_cond (Optional[Callable[[str], bool]]): A callable that takes the latest message and returns True to terminate the chat.
+            silent (bool): Whether to suppress print statements. Default is False.
 
         Returns:
             ChatResult: The result of the chat session, including history.
         """
-        print("Chat session initiated between two agents. Type 'exit' or 'quit' to end the chat.\n")
+        self._log("Chat session initiated between two agents. Type 'exit' or 'quit' to end the chat.\n", silent)
 
-        chat_history = [{self.name: user_input}]
+        chat_history = self._initialize_chat_history(partner_agent, user_input)
+        context = self._build_context(self.name, user_input)
 
-        for i in range(max_turns):
-            # Agent 1 (self) sends a message to Agent 2 (partner_agent)
-            print("---------------------------------------------------")
-            print(f"{self.name} -> {partner_agent.name}: {user_input}")
-            
-            # Send the message to the partner agent
-            response = partner_agent.send_request(user_input)
-            print(response)
-            
-            # Save the response in the chat history
-            
-            choices = response.choices[0]
-            message = choices["message"]
-            tool_calls = message["tool_calls"]
-            
-            if len(tool_calls) == 0:
-                print("No tool calls")
-            else:
-                print(tool_calls[0].function.arguments)
-                
+        turn = 0
+        while max_turns is None or turn < max_turns:
+            turn += 1
+            self._log_separator(silent)
+            self._log_message(f"{self.name} -> {partner_agent.name}: {user_input}", silent)
 
-            chat_history.append({partner_agent.name: message})
-            
-            # Agent 2 (partner_agent) sends a message to Agent 1 (self)
-            print("---------------------------------------------------")
-            print(f"{partner_agent.name} -> {self.name}: {message}")
-            
-            # Send the message to the self agent
-            response = self.send_request(message)
-            print(response)
-            
-            # Save the response in the chat history
-            choices = response.choices[0]
-            message = choices["message"]
-            
-            chat_history.append({self.name: message})
-            
-            # Check for exit command
-            if user_input.lower() in ["exit", "quit"]:
+            # Partner Agent's Turn
+            try:
+                partner_response = self._send_message(partner_agent, context)
+                latest_message, context = self._process_partner_response(partner_response, partner_agent, chat_history, context, silent)
+            except Exception as e:
+                latest_message = self._handle_error(partner_agent.name, f"Error during partner agent request: {str(e)}", chat_history, silent)
+                # Context remains unchanged in case of an error
+
+            # Check for exit commands from partner agent
+            if self._check_exit_condition(latest_message):
+                self._log("Exit command received. Ending chat session.", silent)
                 break
-                
-            
-            
-            
-            
-    
 
+            # Self Agent's Turn
+            try:
+                self_response = self._send_message(self, context)
+                message = self._extract_message_content(self_response)
+
+                self._add_to_history(chat_history, self.name, message)
+                context = self._update_context(context, self.name, message)
+
+                self._log_separator(silent)
+                self._log_message(f"{self.name} -> {partner_agent.name}: {message}", silent)
+
+                # Check for termination condition
+                if termination_cond and termination_cond(message):
+                    self._log("Termination condition met. Ending chat session.", silent)
+                    break
+
+                # Update user_input for the next turn
+                user_input = message
+
+            except Exception as e:
+                self._handle_error(self.name, f"Error during self agent request: {str(e)}", chat_history, silent)
+                break
+
+        return ChatResult(history=chat_history)
+
+    # -------------------- Helper Methods --------------------
+
+    def _log(self, message: str, silent: bool):
+        """
+        Log a message to the console if not silent.
+
+        Args:
+            message (str): The message to log.
+            silent (bool): Whether to suppress logging.
+        """
+        if not silent:
+            print(message)
+
+    def _log_separator(self, silent: bool):
+        """
+        Print a separator line if not silent.
+
+        Args:
+            silent (bool): Whether to suppress logging.
+        """
+        if not silent:
+            print("---------------------------------------------------")
+
+    def _log_message(self, message: str, silent: bool):
+        """
+        Log a chat message if not silent.
+
+        Args:
+            message (str): The chat message to log.
+            silent (bool): Whether to suppress logging.
+        """
+        self._log(message, silent)
+
+    def _initialize_chat_history(self, partner_agent: "Agent", user_input: str) -> list:
+        """
+        Initialize the chat history with the initial messages.
+
+        Args:
+            partner_agent (Agent): The partner agent.
+            user_input (str): The initial user input.
+
+        Returns:
+            list: The initialized chat history.
+        """
+        history = [{"system": partner_agent.instructions}] if hasattr(partner_agent, 'instructions') else []
+        history.append({self.name: user_input})
+        return history
+
+    def _build_context(self, sender: str,  recipient: str, message: str) -> str:
+        """
+        Build the initial context string.
+
+        Args:
+            sender (str): The name of the sender.
+            message (str): The message content.
+
+        Returns:
+            str: The formatted context string.
+        """
+        return f"{sender} -> {recipient}: {message}\n"
+
+    def _send_message(self, agent: "Agent", context: str):
+        """
+        Send a message to the specified agent.
+
+        Args:
+            agent (Agent): The agent to send the message to.
+            context (str): The current conversation context.
+
+        Returns:
+            Any: The response from the agent.
+        """
+        return agent.send_request(context)
+
+    def _process_partner_response(self, response: Any, partner_agent: "Agent", chat_history: list, context: str, silent: bool) -> Tuple[str, str]:
+        """
+        Process the response from the partner agent.
+
+        Args:
+            response (Any): The response object from the partner agent.
+            partner_agent (Agent): The partner agent.
+            chat_history (list): The current chat history.
+            context (str): The current conversation context.
+            silent (bool): Whether to suppress logging.
+
+        Returns:
+            tuple: The latest message and the updated context.
+        """
+        choices = response.choices[0]
+        message = choices.get("message", {})
+        tool_calls = message.get("tool_calls", [])
+
+        if not tool_calls:
+            # Handle normal message
+            if isinstance(message, dict):
+                content = message.get("content", "") or ""
+            else:
+                content = str(message) or ""
+
+            self._add_to_history(chat_history, partner_agent.name, content)
+            context = self._update_context(context, partner_agent.name, content)
+            self._log_separator(silent)
+            self._log_message(f"{partner_agent.name} -> {self.name}: {content}", silent)
+            return content, context
+        else:
+            # Handle tool call
+            tool_call = tool_calls[0]
+            return self._execute_tool_call(tool_call, partner_agent, chat_history, context, silent)
+
+    def _execute_tool_call(self, tool_call: dict, partner_agent: "Agent", chat_history: list, context: str, silent: bool) -> Tuple[str, str]:
+        """
+        Execute a tool call suggested by the partner agent.
+
+        Args:
+            tool_call (dict): The tool call information.
+            partner_agent (Agent): The partner agent.
+            chat_history (list): The current chat history.
+            context (str): The current conversation context.
+            silent (bool): Whether to suppress logging.
+
+        Returns:
+            tuple: The output from the tool and the updated context.
+        """
+        tool_name = tool_call['function']['name']
+        tool_args = json.loads(tool_call['function']['arguments'])
+
+        if hasattr(self, 'functions') and tool_name in self.functions:
+            output = self.functions[tool_name](**tool_args)
+            self._log_tool_output(output, silent)
+
+            context_addition = (
+                f"{partner_agent.name}: Suggested Tool Call: {tool_name}\n"
+                f"Arguments: {tool_call['function']['arguments']}\n"
+                f"Output: {output}\n"
+            )
+            context = self._update_context(context, partner_agent.name, context_addition)
+            history_message = (
+                f"Suggested Tool Call: {tool_name}\n"
+                f"Arguments: {tool_call['function']['arguments']}\n"
+                f"Output: {output}"
+            )
+            self._add_to_history(chat_history, partner_agent.name, history_message)
+            return output, context
+        else:
+            error_msg = f"Function '{tool_name}' not found."
+            self._log(error_msg, silent)
+            context_addition = f"{partner_agent.name}: {error_msg}\n"
+            context = self._update_context(context, partner_agent.name, error_msg)
+            self._add_to_history(chat_history, partner_agent.name, error_msg)
+            return error_msg, context
+
+    def _log_tool_output(self, output: str, silent: bool):
+        """
+        Log the output from a tool call if not silent.
+
+        Args:
+            output (str): The output from the tool.
+            silent (bool): Whether to suppress logging.
+        """
+        if not silent:
+            print(f"-----------------------\n\nOutput from tool call: {output}\n\n-----------------------")
+
+    def _add_to_history(self, chat_history: list, agent_name: str, message: str):
+        """
+        Add a message to the chat history.
+
+        Args:
+            chat_history (list): The current chat history.
+            agent_name (str): The name of the agent sending the message.
+            message (str): The message content.
+        """
+        chat_history.append({agent_name: message})
+
+    def _update_context(self, context: str, sender: str, message: str) -> str:
+        """
+        Update the conversation context with a new message.
+
+        Args:
+            context (str): The current conversation context.
+            sender (str): The name of the sender.
+            message (str): The message content.
+
+        Returns:
+            str: The updated conversation context.
+        """
+        return f"{context}{sender}: {message}\n"
+
+    def _extract_message_content(self, response: Any) -> str:
+        """
+        Safely extract the 'content' from the 'message' in the response.
+
+        Args:
+            response (Any): The response object from the agent.
+
+        Returns:
+            str: The extracted message content or an empty string if unavailable.
+        """
+        message = response.choices[0].get("message", {})
+        if isinstance(message, dict):
+            return message.get("content", "") or ""
+        else:
+            return str(message) or ""
+
+    def _handle_error(self, agent_name: str, error_message: str, chat_history: list, silent: bool) -> str:
+        """
+        Handle errors by logging and updating the chat history.
+
+        Args:
+            agent_name (str): The name of the agent where the error occurred.
+            error_message (str): The error message to log and record.
+            chat_history (list): The current chat history.
+            silent (bool): Whether to suppress logging.
+
+        Returns:
+            str: The error message.
+        """
+        self._log(error_message, silent)
+        self._add_to_history(chat_history, agent_name, error_message)
+        return error_message
+
+    def _check_exit_condition(self, message: str) -> bool:
+        """
+        Check if the latest message is an exit command.
+
+        Args:
+            message (str): The latest message content.
+
+        Returns:
+            bool: True if the message is an exit command, False otherwise.
+        """
+        return isinstance(message, str) and message.lower() in ["exit", "quit"]

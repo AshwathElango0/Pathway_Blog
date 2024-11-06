@@ -46,7 +46,7 @@ while True:
     user_query = input("Enter your query: ")
     res = agent.send_request(user_query)
     choices = res.choices[0]["message"]["tool_calls"]
-    # print(choices[0].function.arguments)
+    print(choices[0].function.arguments)
     if len(choices) ==0:
         path = 2
     else:

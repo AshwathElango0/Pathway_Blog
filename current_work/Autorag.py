@@ -53,4 +53,4 @@ assistant.register_for_llm(name="calculator", description="A simple calculator")
 user_proxy.register_for_execution(name="calculator")(calculator)
 
 
-chat_result = user_proxy.initiate_chat(assistant, message="What is (44232 + 13312 / (232 - 32)) * 5?", silent=True)
+chat_result = user_proxy.initiate_chat(assistant, message="What is (44232 + 13312 / (232 - 32)) * 5?")

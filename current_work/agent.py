@@ -138,7 +138,7 @@ class ChatResult:
         context = ""
         for message in self.history:
             for agent, content in message.items():
-                context += f"{agent}: {content}\n"
+                context += f"{agent}:\n{content}\n"
         
         return context
     
@@ -229,50 +229,67 @@ class Agent:
         self._log("Chat session initiated between two agents. Type 'exit' or 'quit' to end the chat.\n", silent)
 
         chat_history = self._initialize_chat_history(partner_agent, user_input)
-        context = self._build_context(self.name, user_input)
-
+        context = self._build_context(self.name, partner_agent.name, user_input)
         turn = 0
-        while max_turns is None or turn < max_turns:
+        while max_turns is None or turn <= max_turns:
             turn += 1
-            self._log_separator(silent)
-            self._log_message(f"{self.name} -> {partner_agent.name}: {user_input}", silent)
-
+            # Check for termination conditio
+            if turn == 1:
+                self._log_separator(silent)
+                self._log_message(f"\n{self.name} -> {partner_agent.name}:\n{user_input}\n", silent)
+                self._log_separator(silent) 
             # Partner Agent's Turn
+            err = False
             try:
                 partner_response = self._send_message(partner_agent, context)
-                latest_message, context = self._process_partner_response(partner_response, partner_agent, chat_history, context, silent)
+                latest_message, context, is_tool_output = self._process_partner_response(partner_response, partner_agent, chat_history, context, silent)
             except Exception as e:
+                err = True
                 latest_message = self._handle_error(partner_agent.name, f"Error during partner agent request: {str(e)}", chat_history, silent)
+                
+                print(f"Error: {latest_message}")
+                break
                 # Context remains unchanged in case of an error
-
+                
             # Check for exit commands from partner agent
             if self._check_exit_condition(latest_message):
                 self._log("Exit command received. Ending chat session.", silent)
                 break
-
-            # Self Agent's Turn
-            try:
-                self_response = self._send_message(self, context)
-                message = self._extract_message_content(self_response)
-
-                self._add_to_history(chat_history, self.name, message)
-                context = self._update_context(context, self.name, message)
-
+            
+            if is_tool_output:
+                # Skip self agent's turn if tool output is received
+                context_addition = f"Output from tool execution={latest_message}"
+                context = self._update_context(context, self.name, context_addition)
                 self._log_separator(silent)
-                self._log_message(f"{self.name} -> {partner_agent.name}: {message}", silent)
-
-                # Check for termination condition
-                if termination_cond and termination_cond(message):
+                self._log_message(f"\n{self.name} -> {partner_agent.name}:\n{context_addition}\n", silent)
+                self._log_separator(silent)
+                self._add_to_history(chat_history, self.name, context_addition)
+                if termination_cond and termination_cond(latest_message):
                     self._log("Termination condition met. Ending chat session.", silent)
                     break
+                continue
+            # Self Agent's Turn
+            try:
+                
+                if termination_cond and termination_cond(latest_message):
+                    self._log("Termination condition met. Ending chat session.", silent)
+                    break
+                
+                self_response = self._send_message(self, context)
+                message = self._extract_message_content(self_response)
+                self._add_to_history(chat_history, self.name, message)
+                context = self._update_context(context, self.name, message)                
 
+                self._log_separator(silent)
+                self._log_message(f"\n{self.name} -> {partner_agent.name}:\n{message}\n", silent)
+                self._log_separator(silent)
+                
                 # Update user_input for the next turn
                 user_input = message
-
+                
             except Exception as e:
                 self._handle_error(self.name, f"Error during self agent request: {str(e)}", chat_history, silent)
                 break
-
         return ChatResult(history=chat_history)
 
     # -------------------- Helper Methods --------------------
@@ -319,7 +336,8 @@ class Agent:
         Returns:
             list: The initialized chat history.
         """
-        history = [{"system": partner_agent.instructions}] if hasattr(partner_agent, 'instructions') else []
+        # history = [{"system": partner_agent.instructions}] if hasattr(partner_agent, 'instructions') else []
+        history = []
         history.append({self.name: user_input})
         return history
 
@@ -334,7 +352,7 @@ class Agent:
         Returns:
             str: The formatted context string.
         """
-        return f"{sender} -> {recipient}: {message}\n"
+        return f"{message}\n"
 
     def _send_message(self, agent: "Agent", context: str):
         """
@@ -349,7 +367,7 @@ class Agent:
         """
         return agent.send_request(context)
 
-    def _process_partner_response(self, response: Any, partner_agent: "Agent", chat_history: list, context: str, silent: bool) -> Tuple[str, str]:
+    def _process_partner_response(self, response: Any, partner_agent: "Agent", chat_history: list, context: str, silent: bool) -> Tuple[str, str, bool]:
         """
         Process the response from the partner agent.
 
@@ -369,16 +387,18 @@ class Agent:
 
         if not tool_calls:
             # Handle normal message
-            if isinstance(message, dict):
+            if isinstance(message, litellm.types.utils.Message):
                 content = message.get("content", "") or ""
             else:
                 content = str(message) or ""
 
             self._add_to_history(chat_history, partner_agent.name, content)
+            # print int green color
             context = self._update_context(context, partner_agent.name, content)
             self._log_separator(silent)
-            self._log_message(f"{partner_agent.name} -> {self.name}: {content}", silent)
-            return content, context
+            self._log_message(f"\n{partner_agent.name} -> {self.name}:\n{content}\n", silent)
+            self._log_separator(silent)
+            return content, context, False
         else:
             # Handle tool call
             tool_call = tool_calls[0]
@@ -400,42 +420,28 @@ class Agent:
         """
         tool_name = tool_call['function']['name']
         tool_args = json.loads(tool_call['function']['arguments'])
-
+        
         if hasattr(self, 'functions') and tool_name in self.functions:
             output = self.functions[tool_name](**tool_args)
-            self._log_tool_output(output, silent)
-
             context_addition = (
-                f"{partner_agent.name}: Suggested Tool Call: {tool_name}\n"
-                f"Arguments: {tool_call['function']['arguments']}\n"
-                f"Output: {output}\n"
-            )
-            context = self._update_context(context, partner_agent.name, context_addition)
-            history_message = (
                 f"Suggested Tool Call: {tool_name}\n"
                 f"Arguments: {tool_call['function']['arguments']}\n"
-                f"Output: {output}"
             )
-            self._add_to_history(chat_history, partner_agent.name, history_message)
-            return output, context
+            self._log_separator(silent)
+            self._log_message(f"\n{partner_agent.name} -> {self.name}:\n{context_addition}\n", silent)
+            self._log_separator(silent)
+            context = self._update_context(context, partner_agent.name, context_addition)
+
+            self._add_to_history(chat_history, partner_agent.name, context_addition)
+            return output, context, True
         else:
             error_msg = f"Function '{tool_name}' not found."
             self._log(error_msg, silent)
             context_addition = f"{partner_agent.name}: {error_msg}\n"
             context = self._update_context(context, partner_agent.name, error_msg)
             self._add_to_history(chat_history, partner_agent.name, error_msg)
-            return error_msg, context
+            return error_msg, context, False
 
-    def _log_tool_output(self, output: str, silent: bool):
-        """
-        Log the output from a tool call if not silent.
-
-        Args:
-            output (str): The output from the tool.
-            silent (bool): Whether to suppress logging.
-        """
-        if not silent:
-            print(f"-----------------------\n\nOutput from tool call: {output}\n\n-----------------------")
 
     def _add_to_history(self, chat_history: list, agent_name: str, message: str):
         """
@@ -460,7 +466,7 @@ class Agent:
         Returns:
             str: The updated conversation context.
         """
-        return f"{context}{sender}: {message}\n"
+        return f"\n{context}\n\n{message}\n"
 
     def _extract_message_content(self, response: Any) -> str:
         """
@@ -473,7 +479,7 @@ class Agent:
             str: The extracted message content or an empty string if unavailable.
         """
         message = response.choices[0].get("message", {})
-        if isinstance(message, dict):
+        if isinstance(message, litellm.types.utils.Message):
             return message.get("content", "") or ""
         else:
             return str(message) or ""

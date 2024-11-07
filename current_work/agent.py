@@ -231,10 +231,9 @@ class Agent:
         chat_history = self._initialize_chat_history(partner_agent, user_input)
         context = self._build_context(self.name, partner_agent.name, user_input)
         turn = 0
-        while max_turns is None or turn <= max_turns:
-            turn += 1
+        while max_turns is None or turn < max_turns:
             # Check for termination conditio
-            if turn == 1:
+            if turn == 0:
                 self._log_separator(silent)
                 self._log_message(f"\n{self.name} -> {partner_agent.name}:\n{user_input}\n", silent)
                 self._log_separator(silent) 
@@ -267,6 +266,8 @@ class Agent:
                 if termination_cond and termination_cond(latest_message):
                     self._log("Termination condition met. Ending chat session.", silent)
                     break
+                turn += 1
+                
                 continue
             # Self Agent's Turn
             try:
@@ -283,6 +284,8 @@ class Agent:
                 self._log_separator(silent)
                 self._log_message(f"\n{self.name} -> {partner_agent.name}:\n{message}\n", silent)
                 self._log_separator(silent)
+                turn += 1
+                
                 
                 # Update user_input for the next turn
                 user_input = message

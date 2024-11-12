@@ -1,0 +1,7 @@
+[
+    {
+        "model": "gemini-1.5-flash",
+        "api_key": "AIzaSyB_ic4AmBCWeFGnhV4WcVyU9GKPRRVQTyc",
+        "api_type" : "google"
+    }
+]

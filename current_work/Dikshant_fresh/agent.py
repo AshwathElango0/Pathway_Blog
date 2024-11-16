@@ -105,6 +105,7 @@ class LLMAgent(BaseChat):
             return response
         except Exception as e:
             # logger.error(f"Error generating response from LiteLLM: {e}")
+            raise e
             return None
 
     def __call__(self, messages: pw.ColumnExpression, **kwargs) -> pw.ColumnExpression:
@@ -125,6 +126,10 @@ class LLMAgent(BaseChat):
         """
         Helper method to directly call the __wrapped__ method.
         """
+        
+        if kwargs.get('tools') is not None:
+            if len(kwargs.get('tools')) == 0:
+                kwargs.pop('tools')
         return self.__wrapped__(messages, **kwargs)
     
 

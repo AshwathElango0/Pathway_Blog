@@ -12,3 +12,6 @@ Directory ```current_work``` has 3 files
 
 
 Please install libmagic in your system for ParseUnstructured.
+
+NOTE: For the up-to-date version of the codebase, please refer to https://github.com/Aditya2174/Pathway/tree/pipeline_exp_aaryan
+Find a blog (with video explanations) here : https://pathway.com/blog/live-ai-multi-agentic-rag/
